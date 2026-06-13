@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#7F77DD">
+<meta name="description" content="Sistem Absensi Dosen - dengan sinkronisasi Firebase">
+<title>Absensi Dosen</title>
+
+<!-- PWA manifest (dibutuhkan agar bisa di-install / dibungkus jadi APK) -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- Tabler Icons (digunakan oleh class "ti ti-*" di seluruh aplikasi) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/dist/tabler-icons.min.css">
+
+<style>
+/* ====================================================================
+   CSS VARIABLES
+   File aslinya didesain untuk berjalan di dalam sebuah platform yang
+   sudah menyediakan design-token (--color-*, --border-radius-*).
+   Karena sekarang berjalan berdiri sendiri (standalone), variabel-
+   variabel tersebut didefinisikan di sini agar tampilan tetap konsisten.
+   Silakan ubah warnanya jika ingin menyesuaikan branding.
+===================================================================== */
+:root{
+  --color-background-primary:#ffffff;
+  --color-background-secondary:#f7f7f8;
+  --color-background-tertiary:#ececf1;
+  --color-border-primary:#e3e3e8;
+  --color-border-secondary:#d9d9e3;
+  --color-border-tertiary:#ececf1;
+  --color-text-primary:#1a1a1f;
+  --color-text-secondary:#6e6e80;
+  --border-radius-md:8px;
+  --border-radius-lg:14px;
+}
+html,body{
+  margin:0;
+  padding:0;
+  background:var(--color-background-secondary);
+  color:var(--color-text-primary);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+body{
+  display:flex;
+  justify-content:center;
+  padding:0 12px;
+}
+.sr-only{
+  position:absolute;
+  width:1px;height:1px;
+  padding:0;margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+input,select,button{font-family:inherit}
+.ig input,.ig select{
+  padding:8px 10px;
+  border:0.5px solid var(--color-border-secondary);
+  border-radius:var(--border-radius-md);
+  background:var(--color-background-primary);
+  color:var(--color-text-primary);
+}
+.ig input:focus,.ig select:focus{
+  outline:2px solid #7F77DD;
+  outline-offset:1px;
+}
+</style>
+</head>
+<body>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.app{padding:1rem 0;max-width:680px}
+.tabs{display:flex;gap:4px;margin-bottom:1.5rem;border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:0;flex-wrap:wrap}
+.tab{padding:8px 14px;font-size:13px;cursor:pointer;border:none;background:transparent;color:var(--color-text-secondary);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;display:flex;align-items:center;gap:5px}
+.tab.active{color:var(--color-text-primary);border-bottom:2px solid #7F77DD;font-weight:500}
+.tab:hover:not(.active){color:var(--color-text-primary)}
+.tab i{font-size:15px}
+.page{display:none}.page.active{display:block}
+
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem;margin-bottom:1rem}
+.card-header{display:flex;align-items:center;gap:10px;margin-bottom:1.25rem}
+.card-header i{font-size:20px;color:#7F77DD}
+.card-header h2{font-size:16px;font-weight:500;color:var(--color-text-primary)}
+
+.ig{margin-bottom:.85rem}
+.ig label{display:block;font-size:12px;color:var(--color-text-secondary);margin-bottom:5px;font-weight:500}
+.ig input,.ig select{width:100%;font-size:14px}
+.ig input.invalid{border-color:#E24B4A}
+.ig .hint{font-size:11px;color:var(--color-text-secondary);margin-top:3px}
+.ig .err{font-size:11px;color:#A32D2D;margin-top:3px;display:none}
+.ig .err.show{display:block}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.btn-primary{width:100%;padding:9px;background:#7F77DD;color:#fff;border:none;border-radius:var(--border-radius-md);font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-primary:hover{background:#534AB7}
+.btn-primary i{font-size:17px}
+.btn-sm{padding:5px 10px;font-size:12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;background:var(--color-background-secondary);color:var(--color-text-secondary);transition:all .15s;display:inline-flex;align-items:center;gap:4px}
+.btn-sm:hover{background:var(--color-background-primary);color:var(--color-text-primary)}
+.btn-danger{background:#FCEBEB;border-color:#F7C1C1;color:#A32D2D}
+.btn-danger:hover{background:#F7C1C1}
+.btn-info{background:#E6F1FB;border-color:#B5D4F4;color:#185FA5}
+.btn-info:hover{background:#B5D4F4}
+
+.toast{position:fixed;top:16px;right:16px;padding:9px 14px;border-radius:var(--border-radius-md);font-size:13px;font-weight:500;z-index:999;transform:translateX(130%);transition:transform .2s;max-width:260px}
+.toast.show{transform:translateX(0)}
+.toast.success{background:#EAF3DE;border:0.5px solid #C0DD97;color:#3B6D11}
+.toast.error{background:#FCEBEB;border:0.5px solid #F7C1C1;color:#A32D2D}
+
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem}
+.stat-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px;text-align:center}
+.stat-num{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.stat-lbl{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+
+.list-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.list-title{font-size:14px;font-weight:500;color:var(--color-text-primary)}
+.badge{font-size:11px;padding:3px 8px;border-radius:100px;background:#EEEDFE;color:#534AB7}
+
+.record-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);margin-bottom:6px;background:var(--color-background-primary)}
+.avatar{width:36px;height:36px;border-radius:50%;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#534AB7;flex-shrink:0}
+.rec-info{flex:1;min-width:0}
+.rec-name{font-size:14px;font-weight:500;color:var(--color-text-primary)}
+.rec-sub{font-size:12px;color:var(--color-text-secondary);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec-actions{display:flex;gap:6px;flex-shrink:0}
+
+.dosen-card{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);margin-bottom:8px;overflow:hidden;background:var(--color-background-primary)}
+.dosen-card-top{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}
+.dosen-card-body{padding:10px 14px 14px;border-top:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:none}
+.dosen-card-body.open{display:block}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.info-item label{font-size:11px;color:var(--color-text-secondary);display:block;margin-bottom:2px}
+.info-item span{font-size:13px;color:var(--color-text-primary);font-weight:500}
+.chevron{font-size:16px;color:var(--color-text-secondary);transition:transform .2s;margin-left:auto}
+.chevron.open{transform:rotate(180deg)}
+
+.type-toggle{display:flex;gap:6px;margin-bottom:1rem}
+.toggle-btn{flex:1;padding:8px;font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;background:var(--color-background-secondary);color:var(--color-text-secondary);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
+.toggle-btn.active{background:#EEEDFE;border-color:#7F77DD;color:#3C3489}
+.toggle-btn i{font-size:16px}
+
+.dosen-found{background:#EAF3DE;border:0.5px solid #C0DD97;border-radius:var(--border-radius-md);padding:8px 12px;font-size:13px;color:#3B6D11;margin-bottom:10px;display:none;align-items:center;gap:8px}
+.dosen-found.show{display:flex}
+.dosen-found.notfound{background:#FCEBEB;border-color:#F7C1C1;color:#A32D2D}
+
+.progress-bar{height:5px;background:var(--color-background-tertiary);border-radius:100px;overflow:hidden;margin:5px 0}
+.progress-fill{height:100%;border-radius:100px;transition:width .3s}
+.prog-ok{background:#639922}.prog-warn{background:#EF9F27}.prog-over{background:#E24B4A}
+
+.dosen-rekap{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);margin-bottom:8px;overflow:hidden}
+.dosen-rekap-header{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;background:var(--color-background-primary)}
+.dosen-rekap-header:hover{background:var(--color-background-secondary)}
+.dosen-rekap-body{padding:10px 12px;border-top:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);display:none}
+.dosen-rekap-body.open{display:block}
+.day-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.day-row:last-child{border-bottom:none}
+
+.week-header{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.filter-row{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap}
+.filter-row select{padding:6px 10px;font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer}
+.empty-state{text-align:center;padding:2rem;color:var(--color-text-secondary)}
+.empty-state i{font-size:36px;display:block;margin-bottom:8px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot-in{background:#639922}.dot-out{background:#A32D2D}.dot-p{background:#EF9F27}
+
+.modal-overlay{background:rgba(0,0,0,0.35);border-radius:var(--border-radius-lg);display:flex;align-items:center;justify-content:center;padding:2rem;margin-bottom:1rem;display:none}
+.modal-overlay.open{display:flex}
+.modal{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem;width:100%;max-width:420px}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.modal-title{font-size:15px;font-weight:500;color:var(--color-text-primary)}
+
+.search-box{margin-bottom:10px}
+.search-box input{width:100%;font-size:14px;padding:8px 10px}
+
+.sync-badge{font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:100px;margin-top:2px}
+.sync-badge.online{background:#EAF3DE;color:#3B6D11}
+.sync-badge.offline{background:#FCEBEB;color:#A32D2D}
+.sync-badge.local{background:#EEEDFE;color:#534AB7}
+.sync-badge i{font-size:12px}
+
+.session-tag{font-size:10px;background:var(--color-background-tertiary);color:var(--color-text-secondary);padding:1px 6px;border-radius:100px;margin-left:6px}
+</style>
+
+<div class="app" role="main">
+<h2 class="sr-only">Sistem Absensi Dosen</h2>
+
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem">
+  <i class="ti ti-school" aria-hidden="true" style="font-size:22px;color:#7F77DD"></i>
+  <div>
+    <div style="font-size:17px;font-weight:500;color:var(--color-text-primary)">Absensi Dosen</div>
+    <div id="clock" style="font-size:12px;color:var(--color-text-secondary)"></div>
+    <span class="sync-badge local" id="sync-badge"><i class="ti ti-database" aria-hidden="true"></i><span id="sync-text">Memuat...</span></span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showPage('scan')"><i class="ti ti-scan" aria-hidden="true"></i>Scan</button>
+  <button class="tab" onclick="showPage('hari')"><i class="ti ti-list" aria-hidden="true"></i>Hari Ini</button>
+  <button class="tab" onclick="showPage('rekap')"><i class="ti ti-calendar-week" aria-hidden="true"></i>Rekap</button>
+  <button class="tab" onclick="showPage('dosen')"><i class="ti ti-users" aria-hidden="true"></i>Data Dosen</button>
+</div>
+
+<!-- SCAN PAGE -->
+<div id="page-scan" class="page active">
+  <div class="card">
+    <div class="card-header"><i class="ti ti-fingerprint" aria-hidden="true"></i><h2>Input Kehadiran</h2></div>
+    <div class="type-toggle">
+      <button class="toggle-btn active" id="btn-masuk" onclick="setType('masuk')"><i class="ti ti-login" aria-hidden="true"></i>Masuk</button>
+      <button class="toggle-btn" id="btn-keluar" onclick="setType('keluar')"><i class="ti ti-logout" aria-hidden="true"></i>Keluar</button>
+    </div>
+    <div class="ig">
+      <label>NIP / Barcode Dosen</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="nip-input" placeholder="Scan barcode atau ketik NIP..." autocomplete="off" oninput="cariDosen()" onkeydown="if(event.key==='Enter')submitAbsen()" style="flex:1">
+        <button class="btn-sm" onclick="clearNip()" aria-label="Hapus"><i class="ti ti-x" aria-hidden="true"></i></button>
+      </div>
+      <div class="hint">Barcode scanner USB/Bluetooth akan otomatis mengisi kolom ini.</div>
+    </div>
+    <div class="dosen-found" id="dosen-found"><i class="ti ti-user-check" aria-hidden="true" style="font-size:17px" id="dosen-found-icon"></i><span id="dosen-found-text"></span></div>
+    <div class="ig">
+      <label>Waktu</label>
+      <input type="time" id="waktu-input">
+    </div>
+    <button class="btn-primary" onclick="submitAbsen()"><i class="ti ti-check" aria-hidden="true"></i><span id="btn-submit-text">Catat Masuk</span></button>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-num" id="stat-hadir">0</div><div class="stat-lbl"><span class="dot dot-in"></span>Hadir</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-aktif">0</div><div class="stat-lbl"><span class="dot dot-p"></span>Belum Keluar</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-pulang">0</div><div class="stat-lbl"><span class="dot dot-out"></span>Sudah Pulang</div></div>
+  </div>
+</div>
+
+<!-- HARI INI PAGE -->
+<div id="page-hari" class="page">
+  <div class="list-header"><span class="list-title">Absensi Hari Ini</span><span class="badge" id="badge-count">0 catatan</span></div>
+  <div id="list-hari"></div>
+</div>
+
+<!-- REKAP PAGE -->
+<div id="page-rekap" class="page">
+  <div class="filter-row">
+    <select id="filter-minggu" onchange="renderRekap()">
+      <option value="0">Minggu Ini</option>
+      <option value="-1">Minggu Lalu</option>
+      <option value="-2">2 Minggu Lalu</option>
+    </select>
+    <button class="btn-sm" onclick="exportRekap()"><i class="ti ti-download" aria-hidden="true"></i>Export CSV</button>
+  </div>
+  <div id="rekap-container"></div>
+</div>
+
+<!-- DOSEN PAGE -->
+<div id="page-dosen" class="page">
+  <div class="list-header" style="margin-bottom:12px">
+    <span class="list-title">Daftar Dosen</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span class="badge" id="badge-dosen">0 dosen</span>
+      <button class="btn-sm btn-info" onclick="openModal()"><i class="ti ti-plus" aria-hidden="true"></i>Tambah</button>
+    </div>
+  </div>
+
+  <div class="search-box">
+    <input type="text" id="search-dosen" placeholder="Cari nama, NIP, atau program studi..." oninput="renderDosen()">
+  </div>
+
+  <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-title">Tambah Dosen Baru</span>
+        <button class="btn-sm" onclick="closeModal()" aria-label="Tutup"><i class="ti ti-x" aria-hidden="true"></i></button>
+      </div>
+      <div class="ig">
+        <label>Nama Lengkap</label>
+        <input type="text" id="inp-nama" placeholder="Dr. Nama Dosen, M.T.">
+        <div class="err" id="err-nama">Nama wajib diisi.</div>
+      </div>
+      <div class="row2">
+        <div class="ig">
+          <label>NIP</label>
+          <input type="text" id="inp-nip" placeholder="197001012000031001" inputmode="numeric" maxlength="18">
+          <div class="hint">Harus 18 digit angka</div>
+          <div class="err" id="err-nip">NIP harus 18 digit angka dan belum terdaftar.</div>
+        </div>
+        <div class="ig">
+          <label>Tanggal Lahir</label>
+          <input type="date" id="inp-tgl">
+          <div class="err" id="err-tgl">Tanggal lahir tidak boleh di masa depan.</div>
+        </div>
+      </div>
+      <div class="ig">
+        <label>Program Studi</label>
+        <input type="text" id="inp-prodi" placeholder="Teknik Informatika">
+        <div class="err" id="err-prodi">Program studi wajib diisi.</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-sm" onclick="closeModal()" style="flex:1">Batal</button>
+        <button class="btn-primary" onclick="simpanDosen()" style="flex:2"><i class="ti ti-device-floppy" aria-hidden="true"></i><span id="modal-btn-text">Simpan Dosen</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="list-dosen"></div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ====================================================================
+  KONFIGURASI FIREBASE
+  Isi object di bawah dengan kredensial project Firebase Anda
+  (Firebase Console > Project Settings > General > Your apps > SDK config).
+  Jika apiKey dibiarkan kosong, aplikasi otomatis berjalan dalam
+  mode lokal (localStorage) tanpa sinkronisasi cloud.
+===================================================================== -->
+<script>
+window.__FIREBASE_CONFIG__ = {
+  apiKey: "AIzaSyAypK_1sap01Yhdx1Oc1i3FeiT-wMfOOPo",
+  authDomain: "absensi-dosen-3f2b7.firebaseapp.com",
+  projectId: "absensi-dosen-3f2b7",
+  storageBucket: "absensi-dosen-3f2b7.firebasestorage.app",
+  messagingSenderId: "23130703944",
+  appId: "1:23130703944:web:2a4fef4588e009eabeb07d",
+  measurementId: "G-98D2KD6JKG"
+};
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+/* ============================================================
+   STATE
+============================================================ */
+const DEFAULT_DOSEN=[
+  {nip:'197001012000031001',nama:'Dr. Andi Setiawan, M.T.',prodi:'Teknik Informatika',tgl:'1970-01-01'},
+  {nip:'198202152010012002',nama:'Prof. Siti Rahayu, Ph.D.',prodi:'Sistem Informasi',tgl:'1982-02-15'},
+  {nip:'197805202005011003',nama:'Ir. Budi Santoso, M.Sc.',prodi:'Teknik Elektro',tgl:'1978-05-20'},
+  {nip:'199003102019032004',nama:'Dr. Maya Putri, M.Kom.',prodi:'Ilmu Komputer',tgl:'1990-03-10'},
+  {nip:'198712052012041005',nama:'Drs. Hendra Wijaya, M.M.',prodi:'Manajemen Informatika',tgl:'1987-12-05'},
+];
+
+let S={
+  dosenList:[],
+  absensi:[],
+  mode:'masuk',
+  editNip:null
+};
+
+const LOCAL_KEY='absensiDosenData_v3';
+let FIREBASE_ENABLED=false;
+let db=null;
+
+/* ============================================================
+   UTIL: tanggal lokal (FIX timezone - tidak pakai toISOString)
+============================================================ */
+function pad(n){return n.toString().padStart(2,'0')}
+function dateToStr(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function getToday(){return dateToStr(new Date())}
+function getNowTime(){const n=new Date();return pad(n.getHours())+':'+pad(n.getMinutes())}
+
+function getMingguRange(offset){
+  const now=new Date();const day=now.getDay();
+  const mon=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  mon.setDate(mon.getDate()-(day===0?6:day-1)+offset*7);
+  const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+  return{start:dateToStr(mon),end:dateToStr(sun),label:mon.toLocaleDateString('id-ID',{day:'numeric',month:'short'})+' – '+sun.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})};
+}
+
+/* ============================================================
+   UTIL: lainnya
+============================================================ */
+function initials(n){return n.split(' ').filter(w=>w.length>1).slice(0,2).map(w=>w[0].toUpperCase()).join('')}
+function durasi(a,b){if(!a||!b)return null;const[ah,am]=a.split(':').map(Number);const[bh,bm]=b.split(':').map(Number);const d=(bh*60+bm)-(ah*60+am);return d<0?null:d}
+function fmtDur(m){if(m===null||m===undefined)return'-';return Math.floor(m/60)+'j '+m%60+'m'}
+function fmtTgl(s){if(!s)return'-';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}
+function usia(s){if(!s)return'-';const b=new Date(s+'T00:00:00');const a=new Date();let y=a.getFullYear()-b.getFullYear();if(a<new Date(a.getFullYear(),b.getMonth(),b.getDate()))y--;return y+' tahun'}
+
+// Rekomendasi #2: cegah XSS dengan escaping setiap data dinamis sebelum masuk innerHTML
+function escapeHtml(s){
+  if(s===null||s===undefined)return'';
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Rekomendasi #6: escaping field CSV agar tanda kutip ganda tidak merusak format
+function csvField(v){return '"'+String(v).replace(/"/g,'""')+'"'}
+
+/* ============================================================
+   CLOCK
+============================================================ */
+function clock(){const n=new Date();document.getElementById('clock').textContent=n.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' — '+n.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+setInterval(clock,1000);clock();
+
+/* ============================================================
+   SYNC BADGE
+============================================================ */
+function setSyncBadge(state,text){
+  const b=document.getElementById('sync-badge');
+  b.className='sync-badge '+state;
+  const icon=state==='online'?'ti-cloud-check':state==='offline'?'ti-cloud-off':'ti-database';
+  document.getElementById('sync-text').textContent=text;
+  b.querySelector('i').className='ti '+icon;
+}
+
+/* ============================================================
+   LOCAL STORAGE (Rekomendasi #1 - fallback bila Firebase tidak dikonfigurasi)
+============================================================ */
+function saveLocal(){
+  try{
+    localStorage.setItem(LOCAL_KEY,JSON.stringify({dosenList:S.dosenList,absensi:S.absensi}));
+  }catch(e){console.error('Gagal menyimpan ke localStorage',e)}
+}
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(LOCAL_KEY);
+    if(raw){
+      const data=JSON.parse(raw);
+      S.dosenList=data.dosenList&&data.dosenList.length?data.dosenList:DEFAULT_DOSEN.slice();
+      S.absensi=data.absensi||[];
+    } else {
+      S.dosenList=DEFAULT_DOSEN.slice();
+      S.absensi=[];
+      saveLocal();
+    }
+  }catch(e){
+    console.error('Gagal memuat localStorage',e);
+    S.dosenList=DEFAULT_DOSEN.slice();
+    S.absensi=[];
+  }
+}
+
+/* ============================================================
+   FIREBASE (Firestore) SYNC
+   - Koleksi "dosen": doc id = NIP
+   - Koleksi "absensi": doc id = auto-generated oleh Firestore
+============================================================ */
+function initFirebase(){
+  const cfg=window.__FIREBASE_CONFIG__||{};
+  if(!cfg.apiKey||!cfg.projectId){
+    FIREBASE_ENABLED=false;
+    setSyncBadge('local','Mode lokal (localStorage)');
+    loadLocal();
+    renderAll();
+    return;
+  }
+  try{
+    firebase.initializeApp(cfg);
+    db=firebase.firestore();
+    FIREBASE_ENABLED=true;
+    setSyncBadge('offline','Menghubungkan...');
+    attachFirestoreListeners();
+  }catch(e){
+    console.error('Inisialisasi Firebase gagal, beralih ke mode lokal',e);
+    FIREBASE_ENABLED=false;
+    setSyncBadge('local','Mode lokal (localStorage)');
+    loadLocal();
+    renderAll();
+  }
+}
+
+let dosenLoadedOnce=false;
+function attachFirestoreListeners(){
+  // Listener dosen
+  db.collection('dosen').onSnapshot(async snap=>{
+    setSyncBadge('online','Tersambung ke Firebase');
+    if(snap.empty && !dosenLoadedOnce){
+      dosenLoadedOnce=true;
+      // Seed data awal jika koleksi kosong
+      const batch=db.batch();
+      DEFAULT_DOSEN.forEach(d=>batch.set(db.collection('dosen').doc(d.nip),d));
+      try{await batch.commit()}catch(e){console.error('Gagal seeding dosen',e)}
+      return; // snapshot berikutnya akan memuat data hasil seeding
+    }
+    dosenLoadedOnce=true;
+    S.dosenList=snap.docs.map(doc=>({...doc.data(),nip:doc.id}));
+    renderAll();
+  },err=>{
+    console.error('Firestore (dosen) error',err);
+    setSyncBadge('offline','Gagal sinkron, memuat data lokal');
+    loadLocal();renderAll();
+  });
+
+  // Listener absensi
+  db.collection('absensi').onSnapshot(snap=>{
+    S.absensi=snap.docs.map(doc=>({id:doc.id,...doc.data()}));
+    renderAll();
+  },err=>{
+    console.error('Firestore (absensi) error',err);
+  });
+}
+
+/* ============================================================
+   PAGE NAVIGATION
+============================================================ */
+function showPage(p){
+  document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  const map={scan:0,hari:1,rekap:2,dosen:3};
+  document.querySelectorAll('.tab')[map[p]].classList.add('active');
+  renderAll();
+}
+
+function renderAll(){
+  updateStats();
+  const active=document.querySelector('.page.active');
+  if(!active)return;
+  const p=active.id.replace('page-','');
+  if(p==='hari')renderHari();
+  if(p==='rekap')renderRekap();
+  if(p==='dosen')renderDosen();
+}
+
+/* ============================================================
+   SCAN PAGE
+============================================================ */
+function setType(t){
+  S.mode=t;
+  document.getElementById('btn-masuk').classList.toggle('active',t==='masuk');
+  document.getElementById('btn-keluar').classList.toggle('active',t==='keluar');
+  document.getElementById('btn-submit-text').textContent=t==='masuk'?'Catat Masuk':'Catat Keluar';
+}
+
+function cariDosen(){
+  const nip=document.getElementById('nip-input').value.trim();
+  const d=S.dosenList.find(x=>x.nip===nip);
+  const el=document.getElementById('dosen-found');
+  if(!nip){el.classList.remove('show','notfound');return}
+  if(d){
+    el.classList.remove('notfound');el.classList.add('show');
+    document.getElementById('dosen-found-icon').className='ti ti-user-check';
+    document.getElementById('dosen-found-text').textContent=d.nama+' — '+d.prodi;
+  } else if(nip.length>=6){
+    el.classList.add('show','notfound');
+    document.getElementById('dosen-found-icon').className='ti ti-user-x';
+    document.getElementById('dosen-found-text').textContent='NIP tidak ditemukan di data dosen';
+  } else {
+    el.classList.remove('show','notfound');
+  }
+}
+function clearNip(){
+  document.getElementById('nip-input').value='';
+  document.getElementById('dosen-found').classList.remove('show','notfound');
+}
+
+function toast(msg,type='success'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),2800)}
+
+function submitAbsen(){
+  const nip=document.getElementById('nip-input').value.trim();
+  const waktu=document.getElementById('waktu-input').value;
+  if(!nip){toast('Masukkan NIP atau scan barcode dosen','error');return}
+  if(!waktu){toast('Waktu tidak valid','error');return}
+  const dosen=S.dosenList.find(x=>x.nip===nip);
+  if(!dosen){toast('NIP tidak ditemukan di data dosen','error');return}
+  const today=getToday();
+  if(S.mode==='masuk'){
+    const ex=S.absensi.find(a=>a.nip===nip&&a.tanggal===today&&!a.keluar);
+    if(ex){toast(dosen.nama+' sudah absen masuk dan belum absen keluar','error');return}
+    const record={nip,tanggal:today,masuk:waktu,keluar:null};
+    if(FIREBASE_ENABLED){
+      db.collection('absensi').add(record).catch(e=>{console.error(e);toast('Gagal menyimpan ke server','error')});
+    } else {
+      record.id=Date.now();
+      S.absensi.push(record);
+      saveLocal();renderAll();
+    }
+    toast('✓ '+dosen.nama+' — Masuk '+waktu);
+  } else {
+    // Rekomendasi #11: dukung beberapa sesi masuk/keluar per hari -
+    // cari sesi yang masih terbuka (belum keluar) milik dosen ini
+    const rec=S.absensi.find(a=>a.nip===nip&&a.tanggal===today&&!a.keluar);
+    if(!rec){toast(dosen.nama+' belum absen masuk (atau sudah absen keluar) hari ini','error');return}
+    // Rekomendasi #3: validasi waktu keluar harus > waktu masuk
+    const d=durasi(rec.masuk,waktu);
+    if(d===null){toast('Waktu keluar harus setelah waktu masuk ('+rec.masuk+')','error');return}
+    if(FIREBASE_ENABLED){
+      db.collection('absensi').doc(String(rec.id)).update({keluar:waktu}).catch(e=>{console.error(e);toast('Gagal menyimpan ke server','error')});
+    } else {
+      rec.keluar=waktu;
+      saveLocal();renderAll();
+    }
+    toast('✓ '+dosen.nama+' — Keluar '+waktu+' ('+fmtDur(d)+')');
+  }
+  clearNip();
+  document.getElementById('waktu-input').value=getNowTime();
+}
+
+function updateStats(){
+  const today=getToday();
+  const tr=S.absensi.filter(a=>a.tanggal===today);
+  const nips=[...new Set(tr.map(a=>a.nip))];
+  let ak=0,pl=0;
+  nips.forEach(n=>{
+    const recs=tr.filter(a=>a.nip===n);
+    const masihAktif=recs.some(r=>!r.keluar);
+    if(masihAktif)ak++;else pl++;
+  });
+  document.getElementById('stat-hadir').textContent=nips.length;
+  document.getElementById('stat-aktif').textContent=ak;
+  document.getElementById('stat-pulang').textContent=pl;
+}
+
+/* ============================================================
+   HARI INI PAGE - menampilkan SEMUA sesi (Rekomendasi #11)
+============================================================ */
+function renderHari(){
+  const today=getToday();
+  const tr=S.absensi.filter(a=>a.tanggal===today)
+    .slice()
+    .sort((a,b)=>(a.masuk||'').localeCompare(b.masuk||''));
+  const el=document.getElementById('list-hari');
+  document.getElementById('badge-count').textContent=tr.length+' catatan';
+  if(!tr.length){el.innerHTML='<div class="empty-state"><i class="ti ti-calendar-off" aria-hidden="true"></i>Belum ada absensi hari ini</div>';return}
+
+  // hitung jumlah sesi per nip untuk label "Sesi x/y"
+  const counts={};
+  tr.forEach(r=>counts[r.nip]=(counts[r.nip]||0)+1);
+  const idx={};
+
+  let html='';
+  tr.forEach(r=>{
+    const d=S.dosenList.find(x=>x.nip===r.nip)||{nama:r.nip,prodi:'-'};
+    idx[r.nip]=(idx[r.nip]||0)+1;
+    const dur=durasi(r.masuk,r.keluar);
+    const sesiTag=counts[r.nip]>1?`<span class="session-tag">Sesi ${idx[r.nip]}/${counts[r.nip]}</span>`:'';
+    html+=`<div class="record-item">
+      <div class="avatar">${escapeHtml(initials(d.nama))}</div>
+      <div class="rec-info">
+        <div class="rec-name">${escapeHtml(d.nama)}${sesiTag}</div>
+        <div class="rec-sub">${escapeHtml(d.prodi)} · NIP ${escapeHtml(r.nip)}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:500;color:#3B6D11"><i class="ti ti-login" aria-hidden="true" style="font-size:11px"></i> ${escapeHtml(r.masuk||'-')}</div>
+        <div style="font-size:13px;font-weight:500;color:#A32D2D"><i class="ti ti-logout" aria-hidden="true" style="font-size:11px"></i> ${escapeHtml(r.keluar||'—')}</div>
+        <div style="font-size:11px;color:var(--color-text-secondary)">${dur!==null?fmtDur(dur):'Aktif'}</div>
+      </div>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+
+/* ============================================================
+   REKAP PAGE - mendukung beberapa sesi/hari (Rekomendasi #11)
+============================================================ */
+function renderRekap(){
+  const offset=parseInt(document.getElementById('filter-minggu').value);
+  const{start,end,label}=getMingguRange(offset);
+  const rec=S.absensi.filter(a=>a.tanggal>=start&&a.tanggal<=end);
+  const el=document.getElementById('rekap-container');
+  if(!rec.length){el.innerHTML=`<div class="week-header"><div style="font-size:14px;font-weight:500;color:var(--color-text-primary)">${escapeHtml(label)}</div><div style="font-size:12px;color:var(--color-text-secondary)">Target: 40 jam</div></div><div class="empty-state"><i class="ti ti-calendar-stats" aria-hidden="true"></i>Tidak ada data absensi</div>`;return}
+  const nips=[...new Set(rec.map(a=>a.nip))];
+  let html=`<div class="week-header"><div style="font-size:14px;font-weight:500;color:var(--color-text-primary)">${escapeHtml(label)}</div><div style="font-size:12px;color:var(--color-text-secondary)">Target: 40 jam/minggu</div></div>`;
+  nips.forEach(nip=>{
+    const d=S.dosenList.find(x=>x.nip===nip)||{nama:nip,prodi:'-'};
+    const dr=rec.filter(a=>a.nip===nip);
+    let tot=0;
+    const byDay={};
+    dr.forEach(r=>{
+      const dv=durasi(r.masuk,r.keluar);
+      if(dv!==null)tot+=dv;
+      if(!byDay[r.tanggal])byDay[r.tanggal]=[];
+      byDay[r.tanggal].push({masuk:r.masuk,keluar:r.keluar,dur:dv});
+    });
+    const tj=(tot/60);const pct=Math.min(100,Math.round(tj/40*100));
+    const pc=pct>=100?'prog-over':pct>=75?'prog-ok':'prog-warn';
+    const days=['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+    const sd=new Date(start+'T00:00:00');
+    let dh='';
+    for(let i=0;i<6;i++){
+      const dt=new Date(sd);dt.setDate(sd.getDate()+i);
+      const ds=dateToStr(dt);
+      const sessions=byDay[ds];
+      let middle='-',rightCol='-';
+      if(sessions&&sessions.length){
+        const dayTotal=sessions.reduce((s,x)=>s+(x.dur||0),0);
+        const hasActive=sessions.some(x=>x.dur===null);
+        if(sessions.length>1){
+          middle=`${sessions.length} sesi`;
+        } else {
+          middle=(sessions[0].masuk||'-')+' → '+(sessions[0].keluar||'aktif');
+        }
+        rightCol=hasActive?(dayTotal>0?fmtDur(dayTotal)+' +aktif':'aktif'):fmtDur(dayTotal);
+      }
+      dh+=`<div class="day-row"><span style="color:var(--color-text-secondary);width:70px;font-size:12px">${days[i]}</span><span style="color:var(--color-text-primary);font-size:12px">${escapeHtml(middle)}</span><span style="color:var(--color-text-secondary);font-size:11px">${escapeHtml(rightCol)}</span></div>`;
+    }
+    const id='rk-'+nip;
+    html+=`<div class="dosen-rekap"><div class="dosen-rekap-header" onclick="toggleEl('${id}',this.querySelector('.chevron'))">
+      <div class="avatar" style="width:34px;height:34px;font-size:11px">${escapeHtml(initials(d.nama))}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500;color:var(--color-text-primary)">${escapeHtml(d.nama)}</div>
+        <div class="progress-bar"><div class="progress-fill ${pc}" style="width:${pct}%"></div></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:500;color:${pct>=100?'#A32D2D':pct>=75?'#3B6D11':'#BA7517'}">${tj.toFixed(1)}j</div>
+        <div style="font-size:11px;color:var(--color-text-secondary)">${pct}% target</div>
+      </div>
+      <i class="ti ti-chevron-down chevron" aria-hidden="true"></i>
+    </div>
+    <div class="dosen-rekap-body" id="${id}">${dh}
+      <div style="margin-top:8px;padding-top:8px;border-top:0.5px solid var(--color-border-tertiary);display:flex;justify-content:space-between;font-size:13px">
+        <span style="color:var(--color-text-secondary)">Total jam kerja</span>
+        <span style="font-weight:500;color:var(--color-text-primary)">${tj.toFixed(1)} / 40 jam</span>
+      </div>
+      <div style="margin-top:3px;display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:var(--color-text-secondary)">${tj>=40?'Kelebihan':'Kekurangan'}</span>
+        <span style="color:${tj>=40?'#3B6D11':'#A32D2D'}">${tj>=40?'+'+((tj-40).toFixed(1)):((tj-40).toFixed(1))} jam</span>
+      </div>
+    </div></div>`;
+  });
+  el.innerHTML=html;
+}
+
+// Rekomendasi #7: toggle generik untuk body + chevron sekaligus (tanpa addEventListener bertumpuk)
+function toggleEl(id,chevronEl){
+  const e=document.getElementById(id);
+  if(!e)return;
+  e.classList.toggle('open');
+  if(chevronEl)chevronEl.classList.toggle('open',e.classList.contains('open'));
+}
+
+/* ============================================================
+   MODAL - tambah/edit dosen
+   Rekomendasi #8: tutup dengan Escape & klik di luar modal (sudah di markup via onclick overlay)
+============================================================ */
+function clearModalErrors(){
+  ['err-nama','err-nip','err-tgl','err-prodi'].forEach(id=>{
+    document.getElementById(id).classList.remove('show');
+  });
+  ['inp-nama','inp-nip','inp-tgl','inp-prodi'].forEach(id=>{
+    document.getElementById(id).classList.remove('invalid');
+  });
+}
+
+function openModal(editNip){
+  S.editNip=editNip||null;
+  clearModalErrors();
+  const overlay=document.getElementById('modal-overlay');
+  document.getElementById('modal-title').textContent=editNip?'Edit Data Dosen':'Tambah Dosen Baru';
+  document.getElementById('modal-btn-text').textContent=editNip?'Simpan Perubahan':'Simpan Dosen';
+  if(editNip){
+    const d=S.dosenList.find(x=>x.nip===editNip);
+    if(d){
+      document.getElementById('inp-nama').value=d.nama;
+      document.getElementById('inp-nip').value=d.nip;
+      document.getElementById('inp-tgl').value=d.tgl||'';
+      document.getElementById('inp-prodi').value=d.prodi;
+      document.getElementById('inp-nip').disabled=true;
+    }
+  } else {
+    document.getElementById('inp-nama').value='';
+    document.getElementById('inp-nip').value='';
+    document.getElementById('inp-tgl').value='';
+    document.getElementById('inp-prodi').value='';
+    document.getElementById('inp-nip').disabled=false;
+  }
+  overlay.classList.add('open');
+  setTimeout(()=>document.getElementById('inp-nama').focus(),50);
+}
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('inp-nip').disabled=false;
+  S.editNip=null;
+}
+// Rekomendasi #8: tutup modal dengan tombol Escape
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&document.getElementById('modal-overlay').classList.contains('open')){
+    closeModal();
+  }
+});
+
+/* ============================================================
+   SIMPAN / HAPUS DOSEN
+   Rekomendasi #3: validasi NIP (18 digit), tanggal lahir tidak di masa depan
+   Rekomendasi #4: konfirmasi sebelum hapus
+   Rekomendasi #10: terminologi NIP (Nomor Induk Pegawai) untuk dosen
+============================================================ */
+function simpanDosen(){
+  clearModalErrors();
+  const nama=document.getElementById('inp-nama').value.trim();
+  const nip=document.getElementById('inp-nip').value.trim();
+  const tgl=document.getElementById('inp-tgl').value;
+  const prodi=document.getElementById('inp-prodi').value.trim();
+
+  let ok=true;
+  if(!nama){
+    document.getElementById('err-nama').classList.add('show');
+    document.getElementById('inp-nama').classList.add('invalid');
+    ok=false;
+  }
+  if(!/^\d{18}$/.test(nip)){
+    document.getElementById('err-nip').textContent='NIP harus terdiri dari 18 digit angka.';
+    document.getElementById('err-nip').classList.add('show');
+    document.getElementById('inp-nip').classList.add('invalid');
+    ok=false;
+  } else if(!S.editNip && S.dosenList.find(d=>d.nip===nip)){
+    document.getElementById('err-nip').textContent='NIP sudah terdaftar.';
+    document.getElementById('err-nip').classList.add('show');
+    document.getElementById('inp-nip').classList.add('invalid');
+    ok=false;
+  }
+  if(tgl){
+    if(tgl>getToday()){
+      document.getElementById('err-tgl').classList.add('show');
+      document.getElementById('inp-tgl').classList.add('invalid');
+      ok=false;
+    }
+  }
+  if(!prodi){
+    document.getElementById('err-prodi').classList.add('show');
+    document.getElementById('inp-prodi').classList.add('invalid');
+    ok=false;
+  }
+  if(!ok)return;
+
+  const data={nip,nama,prodi,tgl};
+
+  if(FIREBASE_ENABLED){
+    db.collection('dosen').doc(nip).set(data)
+      .then(()=>{toast(S.editNip?'✓ Data dosen diperbarui':'✓ Dosen berhasil ditambahkan');closeModal()})
+      .catch(e=>{console.error(e);toast('Gagal menyimpan ke server','error')});
+  } else {
+    if(S.editNip){
+      const i=S.dosenList.findIndex(d=>d.nip===S.editNip);
+      if(i>-1){S.dosenList[i]=data;toast('✓ Data dosen diperbarui')}
+    } else {
+      S.dosenList.push(data);
+      toast('✓ Dosen berhasil ditambahkan');
+    }
+    saveLocal();closeModal();renderAll();
+  }
+}
+
+function hapusDosen(nip){
+  const d=S.dosenList.find(x=>x.nip===nip);
+  const nama=d?d.nama:nip;
+  // Rekomendasi #4: konfirmasi sebelum hapus
+  if(!confirm('Hapus data dosen "'+nama+'"? Riwayat absensi yang sudah tercatat tidak akan terhapus, namun nama dosen tidak akan tampil lagi pada riwayat tersebut.')){
+    return;
+  }
+  if(FIREBASE_ENABLED){
+    db.collection('dosen').doc(nip).delete()
+      .then(()=>toast('Dosen dihapus'))
+      .catch(e=>{console.error(e);toast('Gagal menghapus di server','error')});
+  } else {
+    S.dosenList=S.dosenList.filter(d=>d.nip!==nip);
+    saveLocal();renderAll();
+    toast('Dosen dihapus');
+  }
+}
+
+/* ============================================================
+   DATA DOSEN PAGE
+   Rekomendasi #9: pencarian/filter dosen
+============================================================ */
+function renderDosen(){
+  const el=document.getElementById('list-dosen');
+  const q=(document.getElementById('search-dosen').value||'').trim().toLowerCase();
+  let list=S.dosenList;
+  if(q){
+    list=list.filter(d=>
+      d.nama.toLowerCase().includes(q)||
+      d.nip.toLowerCase().includes(q)||
+      d.prodi.toLowerCase().includes(q)
+    );
+  }
+  document.getElementById('badge-dosen').textContent=S.dosenList.length+' dosen'+(q?' ('+list.length+' cocok)':'');
+  if(!S.dosenList.length){el.innerHTML='<div class="empty-state"><i class="ti ti-users" aria-hidden="true"></i>Belum ada data dosen</div>';return}
+  if(!list.length){el.innerHTML='<div class="empty-state"><i class="ti ti-search-off" aria-hidden="true"></i>Tidak ada dosen yang cocok dengan pencarian</div>';return}
+  el.innerHTML=list.map(d=>{
+    const id='dc-'+d.nip;
+    return`<div class="dosen-card">
+      <div class="dosen-card-top" onclick="toggleEl('${id}',this.querySelector('.chevron'))">
+        <div class="avatar">${escapeHtml(initials(d.nama))}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:500;color:var(--color-text-primary)">${escapeHtml(d.nama)}</div>
+          <div style="font-size:12px;color:var(--color-text-secondary)">${escapeHtml(d.prodi)}</div>
+        </div>
+        <i class="ti ti-chevron-down chevron" aria-hidden="true"></i>
+      </div>
+      <div class="dosen-card-body" id="${id}">
+        <div class="info-grid">
+          <div class="info-item"><label><i class="ti ti-id-badge" aria-hidden="true" style="font-size:11px"></i> NIP</label><span>${escapeHtml(d.nip)}</span></div>
+          <div class="info-item"><label><i class="ti ti-calendar" aria-hidden="true" style="font-size:11px"></i> Tanggal Lahir</label><span>${escapeHtml(fmtTgl(d.tgl))}</span></div>
+          <div class="info-item"><label><i class="ti ti-clock" aria-hidden="true" style="font-size:11px"></i> Usia</label><span>${escapeHtml(usia(d.tgl))}</span></div>
+          <div class="info-item"><label><i class="ti ti-building" aria-hidden="true" style="font-size:11px"></i> Program Studi</label><span>${escapeHtml(d.prodi)}</span></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-sm btn-info" onclick="openModal('${escapeHtml(d.nip)}');event.stopPropagation()"><i class="ti ti-edit" aria-hidden="true"></i>Edit</button>
+          <button class="btn-sm btn-danger" onclick="hapusDosen('${escapeHtml(d.nip)}');event.stopPropagation()"><i class="ti ti-trash" aria-hidden="true"></i>Hapus</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   EXPORT CSV
+   Rekomendasi #6: escaping field CSV
+============================================================ */
+function exportRekap(){
+  const offset=parseInt(document.getElementById('filter-minggu').value);
+  const{start,end}=getMingguRange(offset);
+  const rec=S.absensi.filter(a=>a.tanggal>=start&&a.tanggal<=end);
+  const nips=[...new Set(rec.map(a=>a.nip))];
+  let csv='Nama,NIP,Tanggal Lahir,Program Studi,Total Jam,% Target,Status\n';
+  nips.forEach(nip=>{
+    const d=S.dosenList.find(x=>x.nip===nip)||{nama:nip,prodi:'-',tgl:''};
+    const dr=rec.filter(a=>a.nip===nip);
+    let tot=0;dr.forEach(r=>{const dv=durasi(r.masuk,r.keluar);if(dv!==null)tot+=dv});
+    const jam=(tot/60).toFixed(1);const pct=Math.round(tot/60/40*100);
+    csv+=[csvField(d.nama),csvField(nip),csvField(fmtTgl(d.tgl)),csvField(d.prodi),jam,pct+'%',pct>=100?'Terpenuhi':'Kurang'].join(',')+'\n';
+  });
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='rekap-absensi-'+start+'.csv';a.click();URL.revokeObjectURL(url);
+  toast('✓ File rekap berhasil diunduh');
+}
+
+/* ============================================================
+   INIT
+============================================================ */
+document.getElementById('waktu-input').value=getNowTime();
+initFirebase();
+</script>
+
+<script>
+// Registrasi Service Worker untuk dukungan PWA / offline
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(e=>console.warn('SW gagal didaftarkan',e));
+  });
+}
+</script>
+</body>
+</html>
